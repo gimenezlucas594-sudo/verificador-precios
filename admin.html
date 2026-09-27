@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Productos · Verificador</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --borde: #30363d;
+    --texto: #f0f3f6; --suave: #8b949e;
+    --acento: #ffd23f; --error: #ff6b6b; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--texto); font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px; }
+
+  /* Login */
+  #login { height: 100%; display: grid; place-items: center; padding: 16px; }
+  #login form { width: 100%; max-width: 360px; }
+  #login h1 { font-size: 22px; margin-bottom: 6px; }
+  #login p { color: var(--suave); margin-bottom: 18px; }
+
+  /* Panel */
+  #panel { display: none; height: 100%; flex-direction: column; padding: 24px 28px; gap: 18px; }
+  #panel.abierto { display: flex; }
+  .cabecera { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cabecera h1 { font-size: 22px; margin-right: auto; }
+  .cuerpo { flex: 1; display: grid; grid-template-columns: 340px 1fr; gap: 20px; min-height: 0; }
+  @media (max-width: 800px) {
+    #panel { padding: 16px; height: auto; }
+    .cuerpo { grid-template-columns: 1fr; }
+    .lista { max-height: 70vh; }
+  }
+  .tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; padding: 20px; }
+  .tarjeta h2 { font-size: 16px; margin-bottom: 14px; color: var(--suave); font-weight: 600; }
+  label { display: block; font-size: 13px; color: var(--suave); margin: 12px 0 5px; }
+  input {
+    width: 100%; padding: 11px 12px; border-radius: 7px; font-size: 16px;
+    background: var(--bg); color: var(--texto); border: 1px solid var(--borde); outline: none;
+  }
+  input:focus { border-color: var(--acento); }
+  button, .boton {
+    padding: 10px 16px; border-radius: 7px; border: 1px solid var(--borde);
+    background: #21262d; color: var(--texto); font-size: 14px; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block; font-family: inherit;
+  }
+  button:hover, .boton:hover { border-color: var(--suave); }
+  button.primario { background: var(--acento); color: #111; border-color: var(--acento); }
+  button.peligro { color: var(--error); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .form-botones { display: flex; gap: 8px; margin-top: 18px; }
+  .form-botones .primario { flex: 1; }
+  .msg { margin-top: 14px; min-height: 20px; font-size: 14px; font-weight: 600; }
+  .msg.ok { color: var(--ok); } .msg.error { color: var(--error); } .msg.info { color: var(--acento); }
+  .lista { display: flex; flex-direction: column; min-height: 0; }
+  .lista-cabecera { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .lista-cabecera input { flex: 1; }
+  #cuenta { color: var(--suave); font-size: 13px; white-space: nowrap; }
+  .tabla-scroll { overflow: auto; flex: 1; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; color: var(--suave); text-transform: uppercase; letter-spacing: .05em;
+       padding: 8px 10px; position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--borde); }
+  td { padding: 9px 10px; border-bottom: 1px solid #21262d; }
+  td.cod { font-family: Consolas, monospace; color: var(--suave); }
+  td.pre { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--acento); white-space: nowrap; }
+  td.acc { text-align: right; white-space: nowrap; }
+  td.acc button { padding: 5px 10px; font-size: 13px; margin-left: 4px; }
+  .vacio { text-align: center; color: var(--suave); padding: 40px; }
+  .ayuda-csv { color: var(--suave); font-size: 12px; margin-top: 16px; line-height: 1.5; }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <form id="formLogin" class="tarjeta">
+    <h1>Productos</h1>
+    <p>Ingresá la contraseña de administrador</p>
+    <input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña" autofocus>
+    <div class="form-botones"><button class="primario" type="submit">Entrar</button></div>
+    <div id="msgLogin" class="msg"></div>
+  </form>
+</div>
+
+<!-- Panel -->
+<div id="panel">
+  <div class="cabecera">
+    <h1>Productos</h1>
+    <button id="btnImportar" type="button">Importar CSV</button>
+    <input id="archivoCSV" type="file" accept=".csv,.txt" hidden>
+    <button id="btnExportar" type="button">Exportar CSV</button>
+    <a class="boton" href="/" target="_blank">Abrir verificador</a>
+    <button id="btnSalir" type="button">Salir</button>
+  </div>
+  <div class="cuerpo">
+    <form id="form" class="tarjeta" autocomplete="off">
+      <h2 id="formTitulo">Nuevo producto</h2>
+      <label for="fCodigo">Código de barras (escaneá acá)</label>
+      <input id="fCodigo" inputmode="numeric">
+      <label for="fNombre">Nombre</label>
+      <input id="fNombre">
+      <label for="fPrecio">Precio</label>
+      <input id="fPrecio" inputmode="decimal" placeholder="Ej: 1500 o 1500,50">
+      <div class="form-botones">
+        <button type="submit" class="primario" id="btnGuardar">Guardar</button>
+        <button type="button" id="btnLimpiar">Limpiar</button>
+      </div>
+      <div id="msg" class="msg"></div>
+      <div class="ayuda-csv">
+        CSV: una línea por producto <code>codigo;nombre;precio</code>.<br>
+        Si el código ya existe, se actualiza. Los verificadores toman los cambios en 2 minutos como máximo.
+      </div>
+    </form>
+    <div class="tarjeta lista">
+      <div class="lista-cabecera">
+        <input id="filtro" placeholder="Buscar por nombre o código…">
+        <span id="cuenta"></span>
+      </div>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Precio</th><th></th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const CLAVE_LS = 'verificador_admin_clave';
+  let clave = '';
+  try { clave = localStorage.getItem(CLAVE_LS) || ''; } catch {}
+
+  function msg(el, texto, tipo) { el.textContent = texto; el.className = 'msg ' + (tipo || ''); }
+
+  async function api(metodo, url, cuerpo, tipo = 'application/json') {
+    const r = await fetch(url, {
+      method: metodo,
+      headers: { 'x-admin-key': clave, ...(cuerpo !== undefined ? { 'Content-Type': tipo } : {}) },
+      body: cuerpo === undefined ? undefined : (tipo === 'application/json' ? JSON.stringify(cuerpo) : cuerpo),
+      cache: 'no-store'
+    });
+    if (r.status === 401) { salir('La sesión venció o la contraseña cambió'); throw new Error('No autorizado'); }
+    const esJSON = (r.headers.get('content-type') || '').includes('json');
+    const datos = esJSON ? await r.json() : await r.text();
+    if (!r.ok) throw new Error(datos.error || 'Error ' + r.status);
+    return datos;
+  }
+
+  function fmtPrecio(n) {
+    const tieneDecimales = Math.round(n * 100) % 100 !== 0;
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS',
+      minimumFractionDigits: tieneDecimales ? 2 : 0, maximumFractionDigits: 2
+    }).format(n);
+  }
+  function parsePrecio(s) {
+    s = String(s ?? '').replace(/[$\s]/g, '');
+    if (!s) return NaN;
+    if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.includes(',')) s = s.replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    return Number(s);
+  }
+
+  // ---------- Login ----------
+  $('formLogin').addEventListener('submit', async e => {
+    e.preventDefault();
+    const intento = $('clave').value;
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave: intento })
+      });
+      if (!r.ok) return msg($('msgLogin'), 'Contraseña incorrecta', 'error');
+      clave = intento;
+      try { localStorage.setItem(CLAVE_LS, clave); } catch {}
+      entrar();
+    } catch {
+      msg($('msgLogin'), 'No se pudo conectar con el servidor (si está en Render gratis puede tardar ~1 min en despertar)', 'error');
+    }
+  });
+
+  function entrar() {
+    $('login').style.display = 'none';
+    $('panel').classList.add('abierto');
+    limpiarForm();
+    cargarLista();
+  }
+  function salir(texto) {
+    clave = '';
+    try { localStorage.removeItem(CLAVE_LS); } catch {}
+    $('panel').classList.remove('abierto');
+    $('login').style.display = 'grid';
+    $('clave').value = '';
+    msg($('msgLogin'), texto || '', texto ? 'error' : '');
+    $('clave').focus();
+  }
+  $('btnSalir').onclick = () => salir();
+
+  // ---------- Lista ----------
+  let productos = [];
+  async function cargarLista() {
+    try { productos = await api('GET', '/api/productos'); render(); }
+    catch (err) { msg($('msg'), 'Error al cargar la lista: ' + err.message, 'error'); }
+  }
+  function render() {
+    const f = $('filtro').value.toLowerCase().trim();
+    const lista = productos
+      .filter(p => !f || p.codigo.includes(f) || (p.nombre || '').toLowerCase().includes(f))
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+    $('cuenta').textContent = `${lista.length} de ${productos.length}`;
+    const tbody = $('tbody');
+    tbody.innerHTML = '';
+    if (!lista.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="vacio">${productos.length ? 'Sin resultados' : 'Todavía no hay productos cargados'}</td></tr>`;
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const p of lista.slice(0, 500)) {
+      const tr = document.createElement('tr');
+      const td = (cls, txt) => { const c = document.createElement('td'); c.className = cls; c.textContent = txt; tr.appendChild(c); };
+      td('cod', p.codigo); td('', p.nombre); td('pre', fmtPrecio(p.precio));
+      const acc = document.createElement('td'); acc.className = 'acc';
+      const bE = document.createElement('button'); bE.textContent = 'Editar'; bE.type = 'button';
+      bE.onclick = () => cargarEnForm(p);
+      const bB = document.createElement('button'); bB.textContent = 'Borrar'; bB.type = 'button'; bB.className = 'peligro';
+      bB.onclick = async () => {
+        if (!confirm(`¿Borrar "${p.nombre}"?`)) return;
+        try {
+          await api('DELETE', '/api/productos/' + encodeURIComponent(p.codigo));
+          msg($('msg'), 'Borrado', 'info'); cargarLista();
+        } catch (err) { msg($('msg'), 'No se pudo borrar: ' + err.message, 'error'); }
+      };
+      acc.append(bE, bB); tr.appendChild(acc);
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+    if (lista.length > 500) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="4" class="vacio">Mostrando 500 de ${lista.length}. Usá el buscador para filtrar.</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  $('filtro').addEventListener('input', render);
+
+  // ---------- Formulario ----------
+  const fCodigo = $('fCodigo'), fNombre = $('fNombre'), fPrecio = $('fPrecio');
+  function limpiarForm() {
+    fCodigo.value = ''; fNombre.value = ''; fPrecio.value = '';
+    $('formTitulo').textContent = 'Nuevo producto';
+    fCodigo.focus();
+  }
+  function cargarEnForm(p) {
+    fCodigo.value = p.codigo; fNombre.value = p.nombre;
+    fPrecio.value = String(p.precio).replace('.', ',');
+    $('formTitulo').textContent = 'Editando producto';
+    fPrecio.focus(); fPrecio.select();
+  }
+
+  // Enter en código: si existe lo carga para editar, si no pasa al nombre
+  fCodigo.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== 'Tab') return;
+    e.preventDefault();
+    const c = fCodigo.value.trim();
+    if (!c) return;
+    const p = productos.find(x => x.codigo === c);
+    if (p) { cargarEnForm(p); msg($('msg'), 'Ese código ya existe: lo estás editando', 'info'); }
+    else { $('formTitulo').textContent = 'Nuevo producto'; msg($('msg'), ''); fNombre.focus(); }
+  });
+  fNombre.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fPrecio.focus(); } });
+
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const codigo = fCodigo.value.trim(), nombre = fNombre.value.trim(), precio = parsePrecio(fPrecio.value);
+    if (!codigo) { msg($('msg'), 'Falta el código', 'error'); return fCodigo.focus(); }
+    if (!nombre) { msg($('msg'), 'Falta el nombre', 'error'); return fNombre.focus(); }
+    if (!Number.isFinite(precio) || precio < 0) { msg($('msg'), 'Precio inválido', 'error'); return fPrecio.focus(); }
+    $('btnGuardar').disabled = true;
+    try {
+      await api('POST', '/api/productos', { codigo, nombre, precio });
+      msg($('msg'), `Guardado ✓ ${nombre} — ${fmtPrecio(precio)}`, 'ok');
+      limpiarForm();
+      cargarLista();
+    } catch (err) {
+      msg($('msg'), 'No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      $('btnGuardar').disabled = false;
+    }
+  });
+  $('btnLimpiar').onclick = () => { limpiarForm(); msg($('msg'), ''); };
+
+  // ---------- Importar / Exportar ----------
+  $('btnImportar').onclick = () => $('archivoCSV').click();
+  $('archivoCSV').addEventListener('change', async () => {
+    const archivo = $('archivoCSV').files[0];
+    $('archivoCSV').value = '';
+    if (!archivo) return;
+    try {
+      msg($('msg'), 'Importando…', 'info');
+      const texto = await archivo.text();
+      const r = await api('POST', '/api/importar', texto, 'text/plain');
+      msg($('msg'), `Importados: ${r.importados}` + (r.omitidos ? ` · omitidas: ${r.omitidos} líneas` : ''), 'ok');
+      cargarLista();
+    } catch (err) { msg($('msg'), 'Error al importar: ' + err.message, 'error'); }
+  });
+
+  $('btnExportar').onclick = async () => {
+    try {
+      const r = await fetch('/api/exportar', { headers: { 'x-admin-key': clave } });
+      if (!r.ok) throw new Error('Error ' + r.status);
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'productos.csv';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      msg($('msg'), 'Exportado ✓', 'ok');
+    } catch (err) { msg($('msg'), 'Error al exportar: ' + err.message, 'error'); }
+  };
+
+  // ---------- Arranque ----------
+  if (clave) {
+    fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }) })
+      .then(r => r.ok ? entrar() : salir())
+      .catch(() => salir('No se pudo conectar con el servidor'));
+  }
+</script>
+</body>
+</html>

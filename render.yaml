@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: verificador-precios
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/salud
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: ADMIN_PASSWORD
+        sync: false   # Render te la pide al crear el servicio
+      - key: DATABASE_URL
+        sync: false   # pegá la URL de Neon (o de un Postgres de Render)

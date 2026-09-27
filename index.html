@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificador de precios</title>
+<style>
+  :root {
+    --bg: #0d1117; --texto: #f0f3f6; --suave: #8b949e;
+    --acento: #ffd23f; --error: #ff6b6b; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--texto);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    overflow: hidden; user-select: none;
+  }
+  body.sin-cursor { cursor: none; }
+
+  .barra {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2.5vh 3vw; color: var(--suave); font-size: 2.4vh;
+  }
+  #local { font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--texto); }
+  .derecha { display: flex; align-items: center; gap: 1.6vw; }
+  #reloj { font-variant-numeric: tabular-nums; font-size: 3vh; }
+  #estado { display: flex; align-items: center; gap: .6vw; font-size: 1.8vh; }
+  #estado::before { content: ""; width: 1.2vh; height: 1.2vh; border-radius: 50%; background: var(--ok); }
+  #estado.offline { color: var(--error); }
+  #estado.offline::before { background: var(--error); }
+
+  .pantalla {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 8vh 6vw;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .pantalla.activa { opacity: 1; pointer-events: auto; }
+
+  .barras {
+    width: 36vh; height: 20vh; position: relative; border-radius: 6px; opacity: .9;
+    background: repeating-linear-gradient(90deg,
+      var(--texto) 0 5px, transparent 5px 9px, var(--texto) 9px 11px, transparent 11px 17px,
+      var(--texto) 17px 24px, transparent 24px 27px, var(--texto) 27px 29px, transparent 29px 35px);
+  }
+  .barras::after {
+    content: ""; position: absolute; left: -8%; right: -8%; height: 4px; top: 8%;
+    background: var(--error); box-shadow: 0 0 20px 5px rgba(255, 80, 80, .65);
+    animation: escanear 2s ease-in-out infinite alternate;
+  }
+  @keyframes escanear { to { top: 90%; } }
+  .titulo-reposo { font-size: 8vh; font-weight: 800; margin-top: 7vh; line-height: 1.1; }
+  .sub-reposo { font-size: 3.2vh; color: var(--suave); margin-top: 2vh; }
+
+  #nombre {
+    font-size: 7.5vh; font-weight: 700; line-height: 1.12; max-width: 88vw;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  #precio {
+    font-size: 24vh; font-weight: 900; color: var(--acento); line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin-top: 4vh;
+    white-space: nowrap;
+  }
+  .codigo-chico {
+    margin-top: 3.5vh; color: var(--suave); font-size: 2.6vh;
+    font-family: Consolas, monospace; letter-spacing: .18em;
+  }
+
+  .cruz {
+    width: 18vh; height: 18vh; border-radius: 50%; border: 1.2vh solid var(--error);
+    display: grid; place-items: center; color: var(--error); font-size: 11vh; font-weight: 800; line-height: 1;
+  }
+  .titulo-error { font-size: 8vh; font-weight: 800; margin-top: 5vh; }
+
+  .entrar { animation: entrar .35s ease-out; }
+  @keyframes entrar { from { transform: scale(.94); opacity: 0; } }
+
+  #progreso {
+    position: fixed; left: 0; bottom: 0; width: 100%; height: 1.4vh;
+    background: var(--acento); transform-origin: left; display: none; z-index: 5;
+  }
+  #progreso.rojo { background: var(--error); }
+  @keyframes vaciar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  .ayuda { position: fixed; bottom: 2.5vh; right: 3vw; color: #3a414a; font-size: 1.8vh; }
+
+  #aviso {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50; display: none;
+    background: var(--error); color: #fff; padding: 14px 20px; font-size: 16px; font-weight: 600; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="aviso"></div>
+
+<div class="barra">
+  <span id="local">Verificador de precios</span>
+  <span class="derecha">
+    <span id="estado">Conectado</span>
+    <span id="reloj"></span>
+  </span>
+</div>
+
+<section id="reposo" class="pantalla activa">
+  <div class="barras"></div>
+  <div class="titulo-reposo">Escaneá tu producto</div>
+  <div class="sub-reposo">Acercá el código de barras al lector</div>
+</section>
+
+<section id="resultado" class="pantalla">
+  <div id="tarjetaResultado">
+    <div id="nombre"></div>
+    <div id="precio"></div>
+    <div id="codigoMostrado" class="codigo-chico"></div>
+  </div>
+</section>
+
+<section id="noEncontrado" class="pantalla">
+  <div id="tarjetaNoEnc" style="display:flex;flex-direction:column;align-items:center">
+    <div class="cruz">✕</div>
+    <div class="titulo-error">Producto no encontrado</div>
+    <div class="sub-reposo">Consultá el precio en caja</div>
+    <div id="codigoNoEnc" class="codigo-chico"></div>
+  </div>
+</section>
+
+<div id="progreso"></div>
+<div class="ayuda" id="ayuda">Tocá la pantalla para pantalla completa</div>
+
+<script>
+  // ================= CONFIGURACIÓN =================
+  const NOMBRE_LOCAL = 'Verificador de precios';  // cambialo por el nombre del negocio
+  const DURACION_MS = 8000;                        // tiempo que se muestra el precio (5000 a 10000)
+  const DURACION_NO_ENCONTRADO_MS = 4000;
+  const SINCRONIZAR_CADA_MS = 2 * 60 * 1000;       // cada cuánto busca precios nuevos (2 min)
+  // =================================================
+
+  const $ = id => document.getElementById(id);
+  $('local').textContent = NOMBRE_LOCAL;
+
+  // ---------- Catálogo local (búsqueda instantánea y funciona sin internet) ----------
+  const CLAVE_CACHE = 'verificador_catalogo_v1';
+  let catalogo = new Map();      // código exacto → producto
+  let catalogoSinCeros = new Map(); // código sin ceros adelante → producto
+  let versionCatalogo = null;
+  const sinCeros = c => String(c).trim().replace(/^0+/, '');
+
+  function cargarCache() {
+    try {
+      const c = JSON.parse(localStorage.getItem(CLAVE_CACHE));
+      if (c && Array.isArray(c.productos)) aplicarCatalogo(c.version, c.productos, false);
+    } catch {}
+  }
+  function aplicarCatalogo(version, productos, guardar = true) {
+    catalogo = new Map(productos.map(p => [p.codigo, p]));
+    catalogoSinCeros = new Map(productos.map(p => [sinCeros(p.codigo), p]));
+    versionCatalogo = version;
+    if (guardar) {
+      try { localStorage.setItem(CLAVE_CACHE, JSON.stringify({ version, productos })); } catch {}
+    }
+  }
+  function buscarLocal(codigo) {
+    const c = String(codigo).trim();
+    return catalogo.get(c) || catalogoSinCeros.get(sinCeros(c)) || null;
+  }
+
+  function marcarConexion(ok) {
+    const e = $('estado');
+    e.classList.toggle('offline', !ok);
+    e.textContent = ok ? `${catalogo.size} productos` : 'Sin conexión';
+  }
+
+  async function sincronizar() {
+    try {
+      const url = '/api/catalogo' + (versionCatalogo ? `?v=${encodeURIComponent(versionCatalogo)}` : '');
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if (!d.sinCambios) aplicarCatalogo(d.version, d.productos);
+      marcarConexion(true);
+      $('aviso').style.display = 'none';
+    } catch {
+      marcarConexion(false);
+      if (!catalogo.size) {
+        $('aviso').textContent = 'No se pudo conectar con el servidor y no hay precios guardados en esta compu. Reintentando…';
+        $('aviso').style.display = 'block';
+      }
+    }
+  }
+
+  // ---------- Pantallas ----------
+  function fmtPrecio(n) {
+    const tieneDecimales = Math.round(n * 100) % 100 !== 0;
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS',
+      minimumFractionDigits: tieneDecimales ? 2 : 0, maximumFractionDigits: 2
+    }).format(n);
+  }
+
+  function tic() {
+    $('reloj').textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  }
+  tic(); setInterval(tic, 10000);
+
+  let timerReposo = null;
+  function mostrar(id) {
+    document.querySelectorAll('.pantalla').forEach(p => p.classList.toggle('activa', p.id === id));
+    if (id === 'reposo') $('progreso').style.display = 'none';
+  }
+  function reanimar(el) { el.classList.remove('entrar'); void el.offsetWidth; el.classList.add('entrar'); }
+  function volverAReposoEn(ms, rojo) {
+    clearTimeout(timerReposo);
+    timerReposo = setTimeout(() => mostrar('reposo'), ms);
+    const b = $('progreso');
+    b.classList.toggle('rojo', !!rojo);
+    b.style.display = 'block';
+    b.style.animation = 'none'; void b.offsetWidth;
+    b.style.animation = `vaciar ${ms}ms linear forwards`;
+  }
+  function ajustarPrecio() {
+    const el = $('precio');
+    el.style.fontSize = '';
+    let tam = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > window.innerWidth * 0.92 && tam > 30) {
+      tam -= 6; el.style.fontSize = tam + 'px';
+    }
+  }
+
+  function mostrarProducto(p) {
+    $('nombre').textContent = p.nombre || '(sin nombre)';
+    $('precio').textContent = fmtPrecio(p.precio);
+    $('codigoMostrado').textContent = p.codigo;
+    mostrar('resultado');
+    ajustarPrecio();
+    reanimar($('tarjetaResultado'));
+    volverAReposoEn(DURACION_MS);
+  }
+  function mostrarNoEncontrado(codigo) {
+    $('codigoNoEnc').textContent = codigo;
+    mostrar('noEncontrado');
+    reanimar($('tarjetaNoEnc'));
+    volverAReposoEn(DURACION_NO_ENCONTRADO_MS, true);
+  }
+
+  let consultaActual = 0;
+  async function consultar(codigo) {
+    const id = ++consultaActual;
+    const local = buscarLocal(codigo);
+    if (local) return mostrarProducto(local);
+
+    // No está en la copia local: puede ser un producto recién cargado, preguntamos al servidor
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 4000);
+      const r = await fetch('/api/buscar/' + encodeURIComponent(codigo), { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(t);
+      const d = await r.json();
+      if (id !== consultaActual) return; // ya escanearon otro
+      if (d.producto) { mostrarProducto(d.producto); sincronizar(); }
+      else mostrarNoEncontrado(codigo);
+    } catch {
+      if (id === consultaActual) mostrarNoEncontrado(codigo);
+    }
+  }
+
+  // ---------- Escucha del lector (siempre activa) ----------
+  let buffer = '', timerBuffer = null;
+
+  function pedirPantallaCompleta() {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  }
+  document.addEventListener('click', pedirPantallaCompleta);
+  document.addEventListener('fullscreenchange', () => {
+    const fs = !!document.fullscreenElement;
+    document.body.classList.toggle('sin-cursor', fs);
+    $('ayuda').textContent = fs ? '' : 'Tocá la pantalla para pantalla completa';
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'F11') return;
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const codigo = buffer.trim();
+      buffer = '';
+      if (codigo.length >= 3) { consultar(codigo); pedirPantallaCompleta(); }
+      return;
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      buffer += e.key;
+      clearTimeout(timerBuffer);
+      timerBuffer = setTimeout(() => { buffer = ''; }, 1000); // descarta teclas sueltas
+    }
+  });
+
+  // ---------- Arranque ----------
+  cargarCache();
+  if (catalogo.size) marcarConexion(true);
+  sincronizar();
+  setInterval(sincronizar, SINCRONIZAR_CADA_MS);
+  window.addEventListener('online', sincronizar);
+</script>
+</body>
+</html>
