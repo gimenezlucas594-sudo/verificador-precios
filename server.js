@@ -276,8 +276,19 @@ app.get('/api/exportar', soloAdmin, envolver(async (_req, res) => {
 }));
 
 // ---- Páginas ----
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
-app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+// Busca cada página en public/ y, si no está, en la raíz del proyecto
+function pagina(nombre) {
+  const enPublic = path.join(__dirname, 'public', nombre);
+  return fs.existsSync(enPublic) ? enPublic : path.join(__dirname, nombre);
+}
+const enviarPagina = nombre => (_req, res) => {
+  const archivo = pagina(nombre);
+  if (!fs.existsSync(archivo)) return res.status(404).send(`Falta ${nombre} en el proyecto`);
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(archivo);
+};
+app.get(['/', '/index.html'], enviarPagina('index.html'));
+app.get(['/admin', '/admin.html'], enviarPagina('admin.html'));
 
 // ---- Despertador: evita que Render gratis duerma el servidor ----
 // Render apaga el servicio gratis tras 15 min sin visitas. Cada 10 min el servidor
